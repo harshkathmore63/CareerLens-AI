@@ -158,7 +158,7 @@ if page == "Job Match":
                 st.success("Top Career Matches:")
 
                 filtered_roles = []
-                for role in top_roles_pred:
+                for role in roles:
                     if role.lower() not in ["not specified", "others", "unknown"]:
                         filtered_roles.append(role)
 
