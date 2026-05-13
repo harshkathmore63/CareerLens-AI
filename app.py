@@ -164,19 +164,12 @@ if page == "Job Match":
 # ================== SALARY PREDICTOR ==================
 if page == "Salary Predictor":
 
-    st.title("💰 Estimate Your Salary")
+    st.title("💰 Salary Predictor")
 
-    st.markdown("Provide your skills and experience to get an estimated salary range.")
+    user_skills = st.text_area("Enter Skills (comma separated)")
+    user_exp = st.slider("Years of Experience", 0, 20, 2)
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        user_skills = st.text_area("🛠 Skills")
-
-    with col2:
-        user_exp = st.slider("📈 Experience (years)", 0, 20, 2)
-
-    if st.button("💸 Predict Salary"):
+    if st.button("Predict Salary"):
 
         if not user_skills.strip():
             st.warning("Please enter skills")
@@ -188,26 +181,20 @@ if page == "Salary Predictor":
                 skill_red = skill_svd.transform(skill_vec)
 
                 exp_array = np.array([[user_exp]])
-                X = np.hstack([skill_red, exp_array])
 
+                company_enc = df['company_enc'].mean()
+                location_enc = df['location_enc'].mean()
+                extra_features = np.array([[company_enc, location_enc]])
+                
+                X = np.hstack([skill_red, exp_array, extra_features])
+                
                 if X.shape[1] != salary_scaler.n_features_in_:
                     st.error(f"Feature mismatch: Expected {salary_scaler.n_features_in_}, got {X.shape[1]}")
                 else:
                     X_scaled = salary_scaler.transform(X)
                     pred_salary = salary_model.predict(X_scaled)[0]
+
                     st.success(f"Estimated Salary: ₹{int(pred_salary):,}")
-
-                st.markdown("## 💡 Estimated Salary")
-
-                st.success(f"₹ {int(pred_salary):,} per year")
-
-                # bonus insight
-                if pred_salary < 500000:
-                    st.info("📊 Entry-level range")
-                elif pred_salary < 1200000:
-                    st.info("📊 Mid-level range")
-                else:
-                    st.info("📊 High-paying role 🚀")
 
             except Exception as e:
                 st.error(f"Error: {e}")
