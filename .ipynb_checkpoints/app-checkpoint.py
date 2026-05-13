@@ -145,8 +145,13 @@ if page == "Job Match":
 
                 st.success("Top Career Matches:")
 
-                for i, role in enumerate(top_roles_pred):
-                    st.write(f"{i+1}. {role} ({probs[top_indices[i]]*100:.2f}%)")
+                filtered_roles = []
+                for role in top_roles_pred:
+                    if role.lower() not in ["not specified", "others", "unknown"]:
+                        filtered_roles.append(role)
+
+                for i, role in enumerate(filtered_roles[:5]):
+                    st.write(f"{i+1}. {role}")
 
             except Exception as e:
                 st.error(f"Error: {e}")
@@ -183,8 +188,17 @@ if page == "Salary Predictor":
                     X = X[:, :expected_features]
 
                 pred_salary = salary_model.predict(X)[0]
+                exp_multiplier = 1 + (user_exp * 0.08)
+                adjusted_salary = pred_salary * exp_multiplier
+                adjusted_salary = max(adjusted_salary, 250000)
+                st.success(f"Estimated Salary: ₹{int(adjusted_salary):,}")
 
-                st.success(f"Estimated Salary: ₹{int(pred_salary):,}")
+                if adjusted_salary < 500000:
+                    st.info("📊 Entry Level Salary")
+                elif adjusted_salary < 1200000:
+                    st.info("📊 Mid Level Salary")
+                else:
+                    st.info("📊 High Paying Role 🚀")
 
             except Exception as e:
                 st.error(f"Error: {e}")
