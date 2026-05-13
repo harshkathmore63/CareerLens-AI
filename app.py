@@ -135,9 +135,16 @@ if page == "Job Match":
                 skill_red = skill_svd_clf.transform(skill_vec)
 
                 X = np.hstack([title_red, skill_red])
-                X_scaled = clf_scaler.transform(X)
-
-                probs = clf_model.predict_proba(X_scaled)[0]
+                if X.shape[1] != clf_scaler.n_features_in_:
+                    st.error(f"Feature mismatch: Expected {clf_scaler.n_features_in_}, got {X.shape[1]}")
+                else:
+                    X_scaled = clf_scaler.transform(X)
+                    probs = clf_model.predict_proba(X_scaled)[0]
+                    top_indices = np.argsort(probs)[-5:][::-1]
+                    top_roles_pred = le.inverse_transform(top_indices)
+                    st.success("Top Career Matches:")
+                    for i, role in enumerate(top_roles_pred):
+                        st.write(f"{i+1}. {role} ({probs[top_indices[i]]*100:.2f}%)")
                 top_indices = np.argsort(probs)[-5:][::-1]
                 top_roles_pred = le.inverse_transform(top_indices)
 
@@ -183,8 +190,12 @@ if page == "Salary Predictor":
                 exp_array = np.array([[user_exp]])
                 X = np.hstack([skill_red, exp_array])
 
-                X_scaled = salary_scaler.transform(X)
-                pred_salary = salary_model.predict(X_scaled)[0]
+                if X.shape[1] != salary_scaler.n_features_in_:
+                    st.error(f"Feature mismatch: Expected {salary_scaler.n_features_in_}, got {X.shape[1]}")
+                else:
+                    X_scaled = salary_scaler.transform(X)
+                    pred_salary = salary_model.predict(X_scaled)[0]
+                    st.success(f"Estimated Salary: ₹{int(pred_salary):,}")
 
                 st.markdown("## 💡 Estimated Salary")
 
