@@ -1,0 +1,4 @@
+.ipynb_checkpoints/
+*.png
+X_*.pkl
+y_*.pkl
