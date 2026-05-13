@@ -138,10 +138,22 @@ if page == "Job Match":
                 elif X.shape[1] > expected_features:
                     X = X[:, :expected_features]
 
-                probs = clf_model.predict_proba(X)[0]
+                skills_text = " ".join(skills_list).lower()
 
-                top_indices = np.argsort(probs)[-5:][::-1]
-                top_roles_pred = le.inverse_transform(top_indices)
+                if any(word in skills_text for word in ["machine learning", "deep learning", "nlp", "ai"]):
+                    roles = ["Data Scientist", "ML Engineer", "AI Engineer"]
+                elif any(word in skills_text for word in ["python", "sql", "excel", "tableau"]):
+                    roles = ["Data Analyst", "Data Scientist", "Business Analyst"]
+                elif any(word in skills_text for word in ["html", "css", "javascript", "react", "node"]):
+                    roles = ["Frontend Developer", "Full Stack Developer", "Web Developer"]
+                elif any(word in skills_text for word in ["aws", "docker", "kubernetes", "devops"]):
+                    roles = ["DevOps Engineer", "Cloud Engineer", "Site Reliability Engineer"]
+                elif any(word in skills_text for word in ["java", "spring", "backend"]):
+                    roles = ["Backend Developer", "Java Developer", "Software Engineer"]
+                else:
+                    probs = clf_model.predict_proba(X)[0]
+                    top_indices = np.argsort(probs)[-5:][::-1]
+                    roles = le.inverse_transform(top_indices)
 
                 st.success("Top Career Matches:")
 
@@ -190,6 +202,26 @@ if page == "Salary Predictor":
                 pred_salary = salary_model.predict(X)[0]
                 exp_multiplier = 1 + (user_exp * 0.08)
                 adjusted_salary = pred_salary * exp_multiplier
+
+                num_skills = len(skills_list)
+                if num_skills <= 2:
+                    adjusted_salary *= 0.5
+                elif num_skills <= 4:
+                    adjusted_salary *= 0.7
+                elif num_skills <= 6:
+                    adjusted_salary *= 0.9
+                else:
+                    adjusted_salary *= 1.1
+
+                high_value_skills = ["python", "machine learning", "aws", "data science"]
+                bonus = sum(1 for s in skills_list if s.lower() in high_value_skills)
+                adjusted_salary *= (1 + bonus * 0.05)
+
+
+                if user_exp <= 1:
+                    adjusted_salary = min(adjusted_salary, 500000)
+                elif user_exp <= 3:
+                    adjusted_salary = min(adjusted_salary, 900000)
                 adjusted_salary = max(adjusted_salary, 250000)
                 st.success(f"Estimated Salary: ₹{int(adjusted_salary):,}")
 
