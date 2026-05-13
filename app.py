@@ -3,13 +3,13 @@ import pandas as pd
 import numpy as np
 import pickle
 import plotly.express as px
-import plotly.graph_objects as go
 import re
+import ast
 import warnings
 warnings.filterwarnings('ignore')
 
 # ================== PAGE CONFIG ==================
-st.set_page_config(page_title="CareerLens AI", layout="wide", page_icon="rocket")
+st.set_page_config(page_title="CareerLens AI", layout="wide", page_icon="🚀")
 
 # ================== LOAD MODELS ==================
 @st.cache_resource
@@ -20,26 +20,35 @@ def load_models():
         clf = pickle.load(f)
     return salary, clf
 
-
 salary_artifacts, clf_artifacts = load_models()
+
+# Salary model
 salary_model = salary_artifacts['model']
 salary_scaler = salary_artifacts['scaler']
 skill_vectorizer = salary_artifacts['vectorizer']
 skill_svd = salary_artifacts['svd']
 
+# Classifier model
 clf_model = clf_artifacts['model']
 clf_scaler = clf_artifacts['scaler']
 le = clf_artifacts['label_encoder']
 
-# ================== LOAD & PROCESS DATA ==================
+title_vectorizer = clf_artifacts['title_vectorizer']
+title_svd = clf_artifacts['title_svd']
+skill_vectorizer_clf = clf_artifacts['skill_vectorizer']
+skill_svd_clf = clf_artifacts['skill_svd']
+
+top_roles = clf_artifacts.get('top_roles', [])
+
+# ================== LOAD DATA ==================
 @st.cache_data
 def load_data():
-    # ✅ FIXED PATH (IMPORTANT)
     df = pd.read_csv("careerlens_mega_enriched.csv")
 
-    df['parsed_skills'] = df['parsed_skills'].apply(lambda x: eval(x) if isinstance(x, str) else [])
+    df['parsed_skills'] = df['parsed_skills'].apply(
+        lambda x: ast.literal_eval(x) if isinstance(x, str) else []
+    )
 
-    # === EXTRACT exp_years ===
     def extract_exp_years(text):
         if pd.isna(text):
             return np.nan
@@ -49,181 +58,148 @@ def load_data():
 
     df['exp_years'] = df['experience_std'].apply(extract_exp_years)
 
-    level_to_exp = {'entry': 1, 'mid': 3.5, 'senior': 7, 'expert': 12}
-
-    for level in df['experience_level'].unique():
-        mask = (df['experience_level'] == level) & (df['exp_years'].isna())
-        df.loc[mask, 'exp_years'] = level_to_exp.get(level, 5)
-
-    # === TECH SKILLS ===
     TECH_SKILLS = {'PYTHON','JAVA','SQL','AWS','DOCKER','LINUX','MYSQL','CSS','HTML','GIT','EXCEL','REACT','NODE','DJANGO','SPRING','TABLEAU','POWERBI','KUBERNETES','AZURE','GCP','DEVOPS','SPARK','HADOOP','TENSORFLOW','C++','C#'}
 
-    def extract_tech(lst):
-        return [s.strip().upper().replace(' ', '') for s in lst if s.strip().upper().replace(' ', '') in TECH_SKILLS]
+    df['tech_skills'] = df['parsed_skills'].apply(
+        lambda lst: [s.strip().upper().replace(' ', '') for s in lst if s.strip().upper().replace(' ', '') in TECH_SKILLS]
+    )
 
-    df['tech_skills'] = df['parsed_skills'].apply(extract_tech)
     df = df[df['tech_skills'].map(len) > 0].copy()
 
-    # === ENCODINGS ===
-    df['company_enc'] = df.groupby('company_std')['salary_inr'].transform('mean')
-    df['location_enc'] = df.groupby('location_std')['salary_inr'].transform('mean')
-
     return df
-
 
 df = load_data()
 
 # ================== SIDEBAR ==================
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/48/rocket.png")
-    st.title("CareerLens AI")
+    st.title("🚀 CareerLens AI")
 
     page = st.radio("Navigate", [
         "Dashboard",
         "Salary Predictor",
-        "Job Match",
-        "Skill Forecaster",
-        "Career Recommender",
-        "Analytics Hub"
+        "Job Match"
     ])
 
 # ================== DASHBOARD ==================
 if page == "Dashboard":
 
     st.title("CareerLens AI Dashboard")
+    st.markdown("""
+    ### 🚀 About CareerLens AI
 
-    col1, col2, col3, col4 = st.columns(4)
+    CareerLens AI is an intelligent career guidance platform that:
+    - Predicts **job roles** based on your skills
+    - Estimates **salary potential**
+    - Analyzes **market trends from 50K+ job listings**
+
+    Built using Machine Learning, NLP, and real-world job data.
+    """)
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Total Jobs", f"{len(df):,}")
+    col2.metric("Avg Salary", f"₹{df['salary_inr'].mean():,.0f}")
+    col3.metric("Top Skill", df['tech_skills'].explode().value_counts().index[0])
+
+    st.subheader("Salary Distribution")
+    fig = px.histogram(df, x='salary_inr', nbins=50)
+    st.plotly_chart(fig, use_container_width=True)
+
+# ================== JOB MATCH ==================
+if page == "Job Match":
+
+    st.title("🎯 Find Your Best Career Match")
+
+    st.markdown("Enter your skills and optionally a job title to discover the most suitable roles.")
+
+    col1, col2 = st.columns(2)
 
     with col1:
-        st.metric("Total Jobs", f"{len(df):,}")
+        user_title = st.text_input("💼 Job Title (optional)")
 
     with col2:
-        st.metric("Avg Salary", f"₹{df['salary_inr'].mean():,.0f}")
+        user_skills = st.text_area("🛠 Skills (comma separated)")
 
-    with col3:
-        st.metric("Top Skill", df['tech_skills'].explode().value_counts().index[0])
+    if st.button("🔍 Analyze My Profile"):
 
-    with col4:
-        st.metric("Fastest Growing", "LINUX +241%")
+        if not user_skills.strip():
+            st.warning("Please enter your skills")
+        else:
+            try:
+                skills_list = [s.strip() for s in user_skills.split(",") if s.strip()]
 
-    dash_tab1, dash_tab2 = st.tabs(["Salary & Skills", "Job Postings by Location"])
+                title_vec = title_vectorizer.transform([user_title])
+                title_red = title_svd.transform(title_vec)
 
-    with dash_tab1:
+                skill_vec = skill_vectorizer_clf.transform([" ".join(skills_list)])
+                skill_red = skill_svd_clf.transform(skill_vec)
 
-        col1, col2 = st.columns(2)
+                X = np.hstack([title_red, skill_red])
+                X_scaled = clf_scaler.transform(X)
 
-        with col1:
-            st.markdown("### Salary Distribution")
-            fig = px.histogram(df, x='salary_inr', nbins=50,
-                               title="Salary Distribution (INR)",
-                               color_discrete_sequence=['#636EFA'])
-            st.plotly_chart(fig, use_container_width=True)
+                probs = clf_model.predict_proba(X_scaled)[0]
+                top_indices = np.argsort(probs)[-5:][::-1]
+                top_roles_pred = le.inverse_transform(top_indices)
 
-        with col2:
-            st.markdown("### Top 10 Skills Demand")
-            skill_count = pd.Series([s for sublist in df['tech_skills'] for s in sublist]).value_counts().head(10)
+                st.markdown("## 🚀 Top Career Matches")
 
-            fig = px.bar(
-                x=skill_count.values,
-                y=skill_count.index,
-                orientation='h',
-                title="Most In-Demand Skills",
-                color_discrete_sequence=['#FF6B6B']
-            )
-            st.plotly_chart(fig, use_container_width=True)
+                for i, role in enumerate(top_roles_pred):
+                    confidence = probs[top_indices[i]] * 100
+                    st.progress(int(confidence))
+                    st.write(f"**{role}** — {confidence:.2f}% match")
 
-    with dash_tab2:
+                if top_roles:
+                    st.markdown("### 🔥 Trending Roles")
+                    st.info(", ".join(top_roles[:10]))
 
-        st.markdown("### Job Postings by Location")
-        st.markdown("**Where are the most opportunities?**")
+            except Exception as e:
+                st.error(f"Error: {e}")
+# ================== SALARY PREDICTOR ==================
+if page == "Salary Predictor":
 
-        salary_range = st.slider(
-            "Filter by Salary Range (₹LPA)",
-            min_value=0,
-            max_value=int(df['salary_inr'].max() / 100000),
-            value=(5, 50),
-            step=5,
-            key="dash_loc_slider"
-        )
+    st.title("💰 Estimate Your Salary")
 
-        min_sal, max_sal = [x * 100000 for x in salary_range]
+    st.markdown("Provide your skills and experience to get an estimated salary range.")
 
-        loc_df = df[(df['salary_inr'] >= min_sal) & (df['salary_inr'] <= max_sal)]
-        loc_counts = loc_df['location_std'].value_counts().head(20)
+    col1, col2 = st.columns(2)
 
-        col1, col2 = st.columns([1, 1])
+    with col1:
+        user_skills = st.text_area("🛠 Skills")
 
-        with col1:
-            st.markdown("#### Top 20 Cities")
+    with col2:
+        user_exp = st.slider("📈 Experience (years)", 0, 20, 2)
 
-            fig_bar = px.bar(
-                x=loc_counts.index,
-                y=loc_counts.values,
-                labels={'x': 'City', 'y': 'Job Postings'},
-                title="Top Job Locations",
-                color=loc_counts.values,
-                color_continuous_scale="Viridis"
-            )
+    if st.button("💸 Predict Salary"):
 
-            fig_bar.update_layout(height=500)
-            st.plotly_chart(fig_bar, use_container_width=True)
+        if not user_skills.strip():
+            st.warning("Please enter skills")
+        else:
+            try:
+                skills_list = [s.strip().upper() for s in user_skills.split(",") if s.strip()]
 
-        with col2:
-            st.markdown("#### Job Density Map (India)")
+                skill_vec = skill_vectorizer.transform([" ".join(skills_list)])
+                skill_red = skill_svd.transform(skill_vec)
 
-            city_coords = {
-                'BENGALURU': (12.97, 77.59),
-                'MUMBAI': (19.07, 72.87),
-                'DELHI': (28.70, 77.10),
-                'HYDERABAD': (17.38, 78.48),
-                'CHENNAI': (13.08, 80.27),
-                'PUNE': (18.52, 73.85),
-                'GURGAON': (28.45, 77.02),
-                'NOIDA': (28.53, 77.39),
-                'KOLKATA': (22.57, 88.36),
-                'AHMEDABAD': (23.02, 72.57),
-                'JAIPUR': (26.91, 75.78),
-                'CHANDIGARH': (30.73, 76.77)
-            }
+                exp_array = np.array([[user_exp]])
+                X = np.hstack([skill_red, exp_array])
 
-            map_data = []
+                X_scaled = salary_scaler.transform(X)
+                pred_salary = salary_model.predict(X_scaled)[0]
 
-            for city, count in loc_counts.items():
-                if city.upper() in city_coords:
-                    lat, lon = city_coords[city.upper()]
-                    map_data.append({
-                        'City': city,
-                        'Count': count,
-                        'lat': lat,
-                        'lon': lon
-                    })
+                st.markdown("## 💡 Estimated Salary")
 
-            map_df = pd.DataFrame(map_data)
+                st.success(f"₹ {int(pred_salary):,} per year")
 
-            if not map_df.empty:
+                # bonus insight
+                if pred_salary < 500000:
+                    st.info("📊 Entry-level range")
+                elif pred_salary < 1200000:
+                    st.info("📊 Mid-level range")
+                else:
+                    st.info("📊 High-paying role 🚀")
 
-                fig_map = px.scatter_mapbox(
-                    map_df,
-                    lat="lat",
-                    lon="lon",
-                    size="Count",
-                    color="Count",
-                    hover_name="City",
-                    size_max=40,
-                    zoom=4,
-                    title="Job Postings Density",
-                    color_continuous_scale="Plasma",
-                    mapbox_style="carto-positron"
-                )
-
-                fig_map.update_layout(height=500,
-                                      margin={"r":0,"t":40,"l":0,"b":0})
-
-                st.plotly_chart(fig_map, use_container_width=True)
-
-            else:
-                st.info("No data in selected salary range")
-
+            except Exception as e:
+                st.error(f"Error: {e}")
 # ================== FOOTER ==================
 st.markdown("---")
-st.markdown("**CareerLens AI** — Built with Love | Powered by xAI | Data: 54K+ Jobs")
+st.markdown("CareerLens AI | ML Powered Career Insights")
