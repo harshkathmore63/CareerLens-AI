@@ -108,22 +108,15 @@ if page == "Dashboard":
 # ================== JOB MATCH ==================
 if page == "Job Match":
 
-    st.title("🎯 Find Your Best Career Match")
+    st.title("🎯 Job Role Predictor")
 
-    st.markdown("Enter your skills and optionally a job title to discover the most suitable roles.")
+    user_title = st.text_input("Enter Job Title (optional)")
+    user_skills = st.text_area("Enter Skills (comma separated)")
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        user_title = st.text_input("💼 Job Title (optional)")
-
-    with col2:
-        user_skills = st.text_area("🛠 Skills (comma separated)")
-
-    if st.button("🔍 Analyze My Profile"):
+    if st.button("Predict Job Role"):
 
         if not user_skills.strip():
-            st.warning("Please enter your skills")
+            st.warning("Please enter skills")
         else:
             try:
                 skills_list = [s.strip() for s in user_skills.split(",") if s.strip()]
@@ -135,29 +128,25 @@ if page == "Job Match":
                 skill_red = skill_svd_clf.transform(skill_vec)
 
                 X = np.hstack([title_red, skill_red])
-                if X.shape[1] != clf_scaler.n_features_in_:
-                    st.error(f"Feature mismatch: Expected {clf_scaler.n_features_in_}, got {X.shape[1]}")
-                else:
-                    X_scaled = clf_scaler.transform(X)
-                    probs = clf_model.predict_proba(X_scaled)[0]
-                    top_indices = np.argsort(probs)[-5:][::-1]
-                    top_roles_pred = le.inverse_transform(top_indices)
-                    st.success("Top Career Matches:")
-                    for i, role in enumerate(top_roles_pred):
-                        st.write(f"{i+1}. {role} ({probs[top_indices[i]]*100:.2f}%)")
+
+                # ✅ padding fix
+                expected_features = clf_model.n_features_in_
+
+                if X.shape[1] < expected_features:
+                    padding = np.zeros((1, expected_features - X.shape[1]))
+                    X = np.hstack([X, padding])
+                elif X.shape[1] > expected_features:
+                    X = X[:, :expected_features]
+
+                probs = clf_model.predict_proba(X)[0]
+
                 top_indices = np.argsort(probs)[-5:][::-1]
                 top_roles_pred = le.inverse_transform(top_indices)
 
-                st.markdown("## 🚀 Top Career Matches")
+                st.success("Top Career Matches:")
 
                 for i, role in enumerate(top_roles_pred):
-                    confidence = probs[top_indices[i]] * 100
-                    st.progress(int(confidence))
-                    st.write(f"**{role}** — {confidence:.2f}% match")
-
-                if top_roles:
-                    st.markdown("### 🔥 Trending Roles")
-                    st.info(", ".join(top_roles[:10]))
+                    st.write(f"{i+1}. {role} ({probs[top_indices[i]]*100:.2f}%)")
 
             except Exception as e:
                 st.error(f"Error: {e}")
@@ -182,19 +171,20 @@ if page == "Salary Predictor":
 
                 exp_array = np.array([[user_exp]])
 
-                company_enc = df['company_enc'].mean()
-                location_enc = df['location_enc'].mean()
-                extra_features = np.array([[company_enc, location_enc]])
-                
-                X = np.hstack([skill_red, exp_array, extra_features])
-                
-                if X.shape[1] != salary_scaler.n_features_in_:
-                    st.error(f"Feature mismatch: Expected {salary_scaler.n_features_in_}, got {X.shape[1]}")
-                else:
-                    X_scaled = salary_scaler.transform(X)
-                    pred_salary = salary_model.predict(X_scaled)[0]
+                X = np.hstack([skill_red, exp_array])
 
-                    st.success(f"Estimated Salary: ₹{int(pred_salary):,}")
+                # ✅ padding fix
+                expected_features = salary_model.n_features_in_
+
+                if X.shape[1] < expected_features:
+                    padding = np.zeros((1, expected_features - X.shape[1]))
+                    X = np.hstack([X, padding])
+                elif X.shape[1] > expected_features:
+                    X = X[:, :expected_features]
+
+                pred_salary = salary_model.predict(X)[0]
+
+                st.success(f"Estimated Salary: ₹{int(pred_salary):,}")
 
             except Exception as e:
                 st.error(f"Error: {e}")
